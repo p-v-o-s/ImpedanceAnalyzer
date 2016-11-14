@@ -12,17 +12,19 @@ ad5933-test
 #define NUM_INCR    (40)
 #define REF_RESIST  (10000)
 
+#define MAX_SERIAL_COMMANDS 20
+
 double gain[NUM_INCR+1];
 int phase[NUM_INCR+1];
 
 struct SweepParams_type{
-  unsigned long start_freq;
-  unsigned long freq_incr;
-  unsigned long num_incr;
+  unsigned long start_freq = START_FREQ;
+  unsigned long freq_incr = FREQ_INCR;
+  unsigned long num_incr = NUM_INCR;
   unsigned long index = 0;
 } currentSweepParams;
 
-SerialCommand sCmd(Serial);         // SerialCommand parser object on USB stream
+SerialCommand sCmd(Serial, MAX_SERIAL_COMMANDS);         // (Stream, int maxCommands));
 
 void setup(void)
 {
@@ -34,8 +36,11 @@ void setup(void)
   sCmd.addCommand("IA.START_FREQ",  IA_START_FREQ_sCmd_config_handler); // 
   sCmd.addCommand("IA.FREQ_INCR",   IA_FREQ_INCR_sCmd_config_handler); //
   sCmd.addCommand("IA.NUM_INCR",    IA_NUM_INCR_sCmd_config_handler); //
+  //sCmd.addCommand("IA.CALIBRATE",   IA_CALIBRATE_sCmd_config_handler);
   sCmd.addCommand("IA.SWEEP.INIT!",  IA_SWEEP_INIT_sCmd_action_handler); //starts first excitation frequency
-  sCmd.addCommand("IA.SWEEP.START!", IA_SWEEP_INIT_sCmd_action_handler); //starts up ADC for measurement
+  sCmd.addCommand("IA.SWEEP.START!", IA_SWEEP_START_sCmd_action_handler); //starts up ADC for measurement
+  sCmd.addCommand("IA.SWEEP.MEAS_RAW?", IA_SWEEP_MEAS_RAW_sCmd_query_handler); //starts up ADC for measurement
+  sCmd.addCommand("IA.SWEEP.INCR_FREQ!", IA_SWEEP_INCR_FREQ_sCmd_action_handler); //starts up ADC for measurement
   
   sCmd.setDefaultHandler(UNRECOGNIZED_sCmd_default_handler);        // Handler for command that isn't matched  (says "What?")
   //----------------------------------------------------------------------------
@@ -54,11 +59,11 @@ void setup(void)
         AD5933::setStartFrequency(START_FREQ) &&
         AD5933::setIncrementFrequency(FREQ_INCR) &&
         AD5933::setNumberIncrements(NUM_INCR) &&
-        AD5933::setPGAGain(PGA_GAIN_X1)))
-        {
-            Serial.println("### FAILED in initialization!");
-            while (true) ;
-        }
+        AD5933::setPGAGain(PGA_GAIN_X5)))
+  {
+      Serial.println("### FAILED in initialization!");
+      while (true) ;
+  }
 }
 
 void loop(void)
@@ -69,6 +74,8 @@ void loop(void)
   }
   delay(10);
 }
+
+
 
 
 void IA_RESET_sCmd_action_handler(SerialCommand this_sCmd) {
@@ -177,23 +184,87 @@ void IA_NUM_INCR_sCmd_config_handler(SerialCommand this_sCmd) {
   }
 }
 
+//void IA_CALIBRATE_sCmd_config_handler(SerialCommand this_sCmd) {
+//  unsigned long int value;
+//  bool success;
+//  char *arg = this_sCmd.next();
+//  if (arg == NULL){
+//    this_sCmd.print(F("### Error: IA.CALIBRATE requires 1 arguments (unsigned long ref_resistance), none given\n"));
+//  }
+//  else{
+//    ref_resistance = atoi(arg);
+//    success = AD5933::calibrate(gain, phase, ref_resistance, NUM_INCR+1);
+//    if(!success){
+//      this_sCmd.print(F("### Error: IA.NUM_INCR -> AD5933::setIncrementFrequency call failed"));
+//      currentSweepParams.num_incr = 0;
+//    } else{
+//      currentSweepParams.num_incr = value;
+//    }    ref_resistance = atoi(arg);
+//  }
+//}
+
+//  // Perform calibration sweep
+//  if (AD5933::calibrate(gain, phase, REF_RESIST, NUM_INCR+1)){
+//    Serial.println("Calibrated!");
+//  }else{
+//    Serial.println("Calibration failed...");
+//  }
+
 void IA_SWEEP_INIT_sCmd_action_handler(SerialCommand this_sCmd) {
+  bool success;
   // Initialize the frequency sweep, starts excitation
-  if (!(AD5933::setPowerMode(POWER_STANDBY) &&            // place in standby
-        AD5933::setControlMode(CTRL_INIT_START_FREQ)))    // init start freq
+  success = AD5933::setPowerMode(POWER_STANDBY);
+  success &= AD5933::setControlMode(CTRL_INIT_START_FREQ);
+  //Serial.println("IA.SWEEP.INIT!");
+  if (!success)    // init start freq
   {
      Serial.println("### Error: IA.SWEEP.INIT! -> Could not initialize frequency sweep");
+  } else {
+    currentSweepParams.index = 0; //starting a new sweep
   }
 }
 
 void IA_SWEEP_START_sCmd_action_handler(SerialCommand this_sCmd) {
+  bool success;
   // triggers the ADC to begin after settling cycles
-  if (!AD5933::setControlMode(CTRL_START_FREQ_SWEEP))   // begin frequency sweep
+  success = AD5933::setControlMode(CTRL_START_FREQ_SWEEP);
+  //Serial.println("IA.SWEEP.START!");
+  if (!success)   // begin frequency sweep
   {
      Serial.println("### Error: IA.SWEEP.START! -> Could not start frequency sweep");
   }
 }
 
+void IA_SWEEP_MEAS_RAW_sCmd_query_handler(SerialCommand this_sCmd) {
+  int real, imag;
+  bool success = true;
+  success = AD5933::getComplexData(&real, &imag);
+  if (!success) {
+    Serial.println("### Error: IA.SWEEP.MEAS_RAW? -> AD5933::getComplexData call failed");
+  } else{
+    float curr_freq = (currentSweepParams.start_freq + currentSweepParams.index*currentSweepParams.freq_incr)/1000.0;
+    Serial.print(curr_freq);Serial.print(",");
+    Serial.print(real);Serial.print(",");
+    Serial.print(imag);Serial.print("\n");
+  }
+}
+
+void IA_SWEEP_INCR_FREQ_sCmd_action_handler(SerialCommand this_sCmd) {
+  if(AD5933::readStatusRegister() & STATUS_SWEEP_DONE){
+    Serial.println("# SWEEP_DONE");
+  } else{
+    // triggers the ADC to begin after settling cycles
+    bool success = AD5933::setControlMode(CTRL_INCREMENT_FREQ);
+    if (!success)   // begin frequency sweep
+    {
+      Serial.println("### Error: IA.SWEEP.INCR_FREQ! -> AD5933::setControlMode(CTRL_START_FREQ_SWEEP) call failed");
+    } else{
+      int val = AD5933::readStatusRegister();
+      //Serial.println(val,HEX);
+      currentSweepParams.index++;
+    }
+  }
+}
 
 // Unrecognized command
 void UNRECOGNIZED_sCmd_default_handler(SerialCommand this_sCmd)
