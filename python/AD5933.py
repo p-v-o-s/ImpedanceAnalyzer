@@ -10,11 +10,11 @@ class IA(object):
         cmd += "\n"
         self._ser.write(cmd.encode())
         
-    def calibrate(self, 
+    def calibrate(self,
                   ref_resistance,
-                  start_freq = 80000,
-                  freq_incr  = 1000,
-                  num_points = 40,
+                  start_freq = 1000,
+                  freq_incr  = 10000,
+                  num_points = 100,
                   ):
         self.send("IA.START_FREQ %d" % start_freq)
         self.send("IA.FREQ_INCR %d" % freq_incr)
@@ -32,8 +32,9 @@ class IA(object):
         f = data[:,0]
         R = data[:,1]
         I = data[:,2]
-        gain = (1.0/ref_resistance)/np.sqrt(R**2 + I**2)
-        return (f, gain)
+        gain  = (1.0/ref_resistance)/np.sqrt(R**2 + I**2)
+        phase = np.arctan2(I,R)
+        return (f, gain, phase)
 
 
 ################################################################################
@@ -44,4 +45,4 @@ if __name__ == "__main__":
     print(port)
     
     ia = IA(port)
-    f, gain = ia.calibrate(1000)
+    f, gain, phase = ia.calibrate(1000)
