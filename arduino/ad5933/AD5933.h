@@ -80,6 +80,10 @@
 #define CTRL_CLOCK_INTERNAL     (0b00000000)
 #define CTRL_PGA_GAIN_X1        (0b00000001)
 #define CTRL_PGA_GAIN_X5        (0b00000000)
+#define CTRL_OUTPUT_RANGE1      (0b00000000) /*2.0 Vpp*/
+#define CTRL_OUTPUT_RANGE2      (0b00000110) /*1.0 Vpp*/
+#define CTRL_OUTPUT_RANGE3      (0b00000100) /*400 mVpp*/
+#define CTRL_OUTPUT_RANGE4      (0b00000010) /*200 mVpp*/
 // Status register options
 #define STATUS_TEMP_VALID       (0x01)
 #define STATUS_DATA_VALID       (0x02)
@@ -119,7 +123,7 @@ class AD5933 {
         static bool setPGAGain(byte);
 
         // Excitation range configuration
-        //bool setRange(byte, int); // not implemented - not used yet
+        static bool setOutputRange(byte);
 
         // Read registers
         static byte readRegister(byte);

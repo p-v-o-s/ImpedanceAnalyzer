@@ -294,6 +294,36 @@ bool AD5933::setPGAGain(byte gain) {
 }
 
 /**
+ * Set the Output voltage range.
+ *
+ * @param range The output range to select. Use constants.
+ * @return Success or failure
+ */
+bool AD5933::setOutputRange(byte range) {
+    // Get the current value of the control register
+    byte val;
+    if (!getByte(CTRL_REG1, &val))
+        return false;
+
+    // Clear out bits (D10 and D9)
+    val &= 0xF9;
+
+    // Determine what gain factor was selected
+    switch(range){
+        case CTRL_OUTPUT_RANGE1:
+        case CTRL_OUTPUT_RANGE2:
+        case CTRL_OUTPUT_RANGE3:
+        case CTRL_OUTPUT_RANGE4:
+            val |= range;
+            break;
+        default:
+            return false;
+            break;
+    }
+    return sendByte(CTRL_REG1, val);
+}
+
+/**
  * Read the value of a register.
  *
  * @param reg The address of the register to read.

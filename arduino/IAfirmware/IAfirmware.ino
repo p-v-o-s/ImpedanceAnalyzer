@@ -36,10 +36,12 @@ void setup(void)
   sCmd.addCommand("IA.START_FREQ",  IA_START_FREQ_sCmd_config_handler); // 
   sCmd.addCommand("IA.FREQ_INCR",   IA_FREQ_INCR_sCmd_config_handler); //
   sCmd.addCommand("IA.NUM_INCR",    IA_NUM_INCR_sCmd_config_handler); //
+  sCmd.addCommand("IA.OUTPUT_RANGE",IA_OUTPUT_RANGE_sCmd_config_handler); //
   //sCmd.addCommand("IA.CALIBRATE",   IA_CALIBRATE_sCmd_config_handler);
   sCmd.addCommand("IA.SWEEP.INIT!",  IA_SWEEP_INIT_sCmd_action_handler); //starts first excitation frequency
   sCmd.addCommand("IA.SWEEP.START!", IA_SWEEP_START_sCmd_action_handler); //starts up ADC for measurement
   sCmd.addCommand("IA.SWEEP.MEAS_RAW?", IA_SWEEP_MEAS_RAW_sCmd_query_handler); //starts up ADC for measurement
+  sCmd.addCommand("IA.SWEEP.REPEAT_FREQ!", IA_SWEEP_REPEAT_FREQ_sCmd_action_handler); //starts up ADC for measurement
   sCmd.addCommand("IA.SWEEP.INCR_FREQ!", IA_SWEEP_INCR_FREQ_sCmd_action_handler); //starts up ADC for measurement
   
   sCmd.setDefaultHandler(UNRECOGNIZED_sCmd_default_handler);        // Handler for command that isn't matched  (says "What?")
@@ -184,6 +186,40 @@ void IA_NUM_INCR_sCmd_config_handler(SerialCommand this_sCmd) {
   }
 }
 
+void IA_OUTPUT_RANGE_sCmd_config_handler(SerialCommand this_sCmd) {
+  unsigned long int value;
+  bool success;
+  char *arg = this_sCmd.next();
+  if (arg == NULL){
+    this_sCmd.print(F("### Error: IA.OUTPUT_RANGE requires 1 arguments (range = 1,2,3,4), none given\n"));
+  }
+  else{
+    value = atoi(arg);
+    byte range = CTRL_OUTPUT_RANGE1;
+    switch(value){
+      case 1:
+        success = AD5933::setOutputRange(CTRL_OUTPUT_RANGE1);
+        break;
+      case 2:
+        success = AD5933::setOutputRange(CTRL_OUTPUT_RANGE2);
+        break;
+      case 3:
+        success = AD5933::setOutputRange(CTRL_OUTPUT_RANGE3);
+        break;
+      case 4:
+        success = AD5933::setOutputRange(CTRL_OUTPUT_RANGE4);
+        break;
+      default:
+        this_sCmd.print(F("### Error: IA.OUTPUT_RANGE range = 1,2,3 or 4\n"));
+        success = false;
+        break;
+    }
+    if(!success){
+      this_sCmd.print(F("### Error: IA.OUTPUT_RANGE  -> AD5933::setOutputRange call failed"));
+    }
+  }
+}
+
 //void IA_CALIBRATE_sCmd_config_handler(SerialCommand this_sCmd) {
 //  unsigned long int value;
 //  bool success;
@@ -246,6 +282,17 @@ void IA_SWEEP_MEAS_RAW_sCmd_query_handler(SerialCommand this_sCmd) {
     Serial.print(curr_freq);Serial.print(",");
     Serial.print(real);Serial.print(",");
     Serial.print(imag);Serial.print("\n");
+  }
+}
+
+void IA_SWEEP_REPEAT_FREQ_sCmd_action_handler(SerialCommand this_sCmd) {
+  bool success;
+  // triggers the ADC to begin after settling cycles
+  success = AD5933::setControlMode(CTRL_REPEAT_FREQ);
+  //Serial.println("IA.SWEEP.REPEAT_FREQ!");
+  if (!success)   // begin frequency sweep
+  {
+     Serial.println("### Error: IA.SWEEP.REPEAT_FREQ! -> Could not repeat frequency");
   }
 }
 
